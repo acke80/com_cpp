@@ -17,7 +17,13 @@ private:
     unsigned int m_com_index{ 0 };
 
 public:
-    ComPort(unsigned int com_index) : m_com_index(com_index) {}
+    ComPort(unsigned int com_index) : m_com_index(com_index) 
+    {
+        set_baud_rate(19200);
+        set_parity(0);
+        set_data_bits(8);
+        set_stop_bits(1);
+    }
     ComPort(unsigned int com_index, unsigned int baud_rate, unsigned int parity,
         unsigned int data_bits, unsigned int stop_bits) : m_com_index(com_index) 
     {
@@ -129,14 +135,14 @@ public:
     {
         DWORD dwEventMask;
         DWORD NoBytesRead;
-        BOOL status = WaitCommEvent(m_port, &dwEventMask, NULL);
+        bool status = WaitCommEvent(m_port, &dwEventMask, NULL);
         if (!status)
         {
             return false;
         }
 
         char* raw_data = nullptr;
-        bool status = ReadFile(m_port, raw_data, num_bytes, &NoBytesRead, NULL);
+        status = ReadFile(m_port, raw_data, num_bytes, &NoBytesRead, NULL);
         data = std::string{ raw_data };
         
         return status;
