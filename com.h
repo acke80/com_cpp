@@ -10,78 +10,70 @@ namespace com
 class ComPort
 {
 public:
-    typedef HANDLE port_t;
+    typedef HANDLE  port_t;
+    typedef DCB     params_t;
 
 private:
     port_t m_port{ nullptr };
+    params_t m_params{ sizeof(params_t) };
+
     unsigned int m_com_index{ 0 };
+    bool m_open{ false };
 
 public:
     ComPort(unsigned int com_index) : m_com_index(com_index) 
     {
-        set_baud_rate(19200);
-        set_parity(0);
-        set_data_bits(8);
-        set_stop_bits(1);
-    }
-    ComPort(unsigned int com_index, unsigned int baud_rate, unsigned int parity,
-        unsigned int data_bits, unsigned int stop_bits) : m_com_index(com_index) 
-    {
-        set_baud_rate(baud_rate);
-        set_parity(parity);
-        set_data_bits(data_bits);
-        set_stop_bits(stop_bits);
+        setBaudRate(19200);
+        setParity(0);
+        setDataBits(8);
+        setStopBits(1);
     }
 
     ~ComPort()
     {
         flush();
-        close();
-    }
-
-    void set_baud_rate(unsigned int baud_rate)
-    {
-        DCB dcbSerialParams = { 0 };
-        BOOL Status;
-        dcbSerialParams.DCBlength = sizeof(dcbSerialParams);
-        Status = GetCommState(m_port, &dcbSerialParams);
-
-        dcbSerialParams.BaudRate = baud_rate;
-        Status = SetCommState(m_port, &dcbSerialParams);
-    }
-
-    void set_parity(unsigned int parity)
-    {
-        DCB dcbSerialParams = { 0 };
-        BOOL Status;
-        dcbSerialParams.DCBlength = sizeof(dcbSerialParams);
-        Status = GetCommState(m_port, &dcbSerialParams);
-
-        dcbSerialParams.Parity = parity;
-        Status = SetCommState(m_port, &dcbSerialParams);
-
-    }
-
-    void set_data_bits(unsigned int bits)
-    {
-        DCB dcbSerialParams = { 0 };
-        BOOL Status;
-        dcbSerialParams.DCBlength = sizeof(dcbSerialParams);
-        Status = GetCommState(m_port, &dcbSerialParams);
-
-        dcbSerialParams.ByteSize = bits;
-        Status = SetCommState(m_port, &dcbSerialParams);
-    }
-
-    void set_stop_bits(unsigned int bits)
-    {
-        DCB dcbSerialParams = { 0 };
-        BOOL Status;
-        dcbSerialParams.DCBlength = sizeof(dcbSerialParams);
-        Status = GetCommState(m_port, &dcbSerialParams);
         
-        dcbSerialParams.StopBits = bits;
-        Status = SetCommState(m_port, &dcbSerialParams);
+        if (m_open)
+        {
+            close();
+        }
+    }
+
+    bool setBaudRate(unsigned int baud_rate)
+    {
+        if (!GetCommState(m_port, &m_params)) return false;
+
+        m_params.BaudRate = baud_rate;
+        
+        return SetCommState(m_port, &m_params);
+    }
+
+    bool setParity(unsigned int parity)
+    {
+        if (!GetCommState(m_port, &m_params)) return false;
+
+        m_params.Parity = parity;
+
+        return SetCommState(m_port, &m_params);
+
+    }
+
+    bool setDataBits(unsigned int bits)
+    {
+        if (!GetCommState(m_port, &m_params)) return false;
+
+        m_params.ByteSize = bits;
+
+        return SetCommState(m_port, &m_params);
+    }
+
+    bool setStopBits(unsigned int bits)
+    {
+        if (!GetCommState(m_port, &m_params)) return false;
+
+        m_params.StopBits = bits;
+
+        return SetCommState(m_port, &m_params);
     }
 
     bool open()
@@ -109,17 +101,24 @@ public:
         }
         else
         {
+            m_open = true;
             m_port = port;
         }
     }
 
     void close()
     {
-        CloseHandle(m_port);
+        if (m_open)
+        {
+            CloseHandle(m_port);
+            m_open = false;
+        }
     }
 
     bool write(const std::string& data)
     {
+        if (!m_open) return false;
+
         DWORD bytesWritten;
         bool status = WriteFile(
             m_port,
@@ -131,25 +130,25 @@ public:
         return status;
     }
 
-    bool read(std::string& data, unsigned int num_bytes)
+    bool read(char* data, unsigned int num_bytes)
     {
+        if (!m_open) return false;
+
         DWORD dwEventMask;
         DWORD NoBytesRead;
-        bool status = WaitCommEvent(m_port, &dwEventMask, NULL);
-        if (!status)
+
+        if (!WaitCommEvent(m_port, &dwEventMask, nullptr))
         {
             return false;
         }
-
-        char* raw_data = nullptr;
-        status = ReadFile(m_port, raw_data, num_bytes, &NoBytesRead, NULL);
-        data = std::string{ raw_data };
         
-        return status;
+        return ReadFile(m_port, data, num_bytes, &NoBytesRead, nullptr);
     }
 
     void flush()
     {
+        if (!m_open) return;
+
         PurgeComm(m_port, PURGE_RXCLEAR);
         PurgeComm(m_port, PURGE_TXCLEAR);
     }
